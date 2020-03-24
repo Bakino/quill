@@ -1,17 +1,24 @@
+import { eventName as SHADOW_SELECTIONCHANGE } from 'shadow-selection-polyfill';
 import EventEmitter from 'eventemitter3';
-import instances from './instances';
+// import instances from './instances';
 import logger from './logger';
 
 const debug = logger('quill:events');
-const EVENTS = ['selectionchange', 'mousedown', 'mouseup', 'click'];
+// const EVENTS = ['selectionchange', 'mousedown', 'mouseup', 'click'];
+const EVENTS = [SHADOW_SELECTIONCHANGE, 'mousedown', 'mouseup', 'click'];
+const EMITTERS = [];
+const supportsRootNode = 'getRootNode' in document;
 
 EVENTS.forEach(eventName => {
   document.addEventListener(eventName, (...args) => {
-    Array.from(document.querySelectorAll('.ql-container')).forEach(node => {
-      const quill = instances.get(node);
-      if (quill && quill.emitter) {
-        quill.emitter.handleDOM(...args);
-      }
+    // Array.from(document.querySelectorAll('.ql-container')).forEach(node => {
+    //   const quill = instances.get(node);
+    //   if (quill && quill.emitter) {
+    //     quill.emitter.handleDOM(...args);
+    //   }
+    // });
+    EMITTERS.forEach(em => {
+      em.handleDOM(...args);
     });
   });
 });
@@ -20,6 +27,7 @@ class Emitter extends EventEmitter {
   constructor() {
     super();
     this.listeners = {};
+    EMITTERS.push(this);
     this.on('error', debug.error);
   }
 
@@ -29,8 +37,28 @@ class Emitter extends EventEmitter {
   }
 
   handleDOM(event, ...args) {
+    const target = event.composedPath ? event.composedPath()[0] : event.target;
+    // const target = (event.composedPath ? event.composedPath()[0] : event.target);
+    // eslint-disable-next-line no-shadow
+    const containsNode = (node, target) => {
+      if (!supportsRootNode || target.getRootNode() === document) {
+        return node.contains(target);
+      }
+
+      while (!node.contains(target)) {
+        const root = target.getRootNode();
+        if (!root || !root.host) {
+          return false;
+        }
+        target = root.host;
+      }
+
+      return true;
+    };
+
     (this.listeners[event.type] || []).forEach(({ node, handler }) => {
-      if (event.target === node || node.contains(event.target)) {
+      // if (event.target === node || node.contains(event.target)) {
+      if (target === node || containsNode(node, target)) {
         handler(event, ...args);
       }
     });
